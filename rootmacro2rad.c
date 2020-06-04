@@ -3,7 +3,7 @@
 void writeOutputFile(char histType, int histNum, const char* histName, char *filename){
   
   FILE *out;
-  int i;
+  int i,j;
   float val;
   char outFileName[256], suffix[32];
   strncpy(outFileName,filename,224);
@@ -17,6 +17,10 @@ void writeOutputFile(char histType, int histNum, const char* histName, char *fil
 
   switch (histType)
     {
+      case 2:
+        snprintf(suffix,32,"hist%i.m4b",histNum);
+        strncat(outFileName,suffix,32);
+        break;
       case 1:
         snprintf(suffix,32,"hist%i.spe",histNum);
         strncat(outFileName,suffix,32);
@@ -35,9 +39,15 @@ void writeOutputFile(char histType, int histNum, const char* histName, char *fil
   
   switch (histType)
     {
+      case 2:
+        for(i=0;i<S4K;i++){
+          fwrite(hist2[i],sizeof(hist2[i]),1,out);
+        }
+        break;
       case 1:
+        //write .spe header
         buffSize = 24;
-        arraySize = 4096;
+        arraySize = S4K;
         fwrite(&buffSize,sizeof(int32_t),1,out);
         fwrite(&spLabel,sizeof(spLabel),1,out);
         fwrite(&arraySize,sizeof(int32_t),1,out);
@@ -48,8 +58,50 @@ void writeOutputFile(char histType, int histNum, const char* histName, char *fil
 
         int byteSize = arraySize*=4;
         fwrite(&byteSize,sizeof(int32_t),1,out);
-        for(i=0;i<arraySize;i++){
+        for(i=0;i<S4K;i++){
           val = (float)hist[i];
+          fwrite(&val,sizeof(float),1,out);
+        }
+        fwrite(&byteSize,sizeof(int32_t),1,out);
+        break;
+      default:
+        break;
+    }
+
+  fclose(out);
+
+  //write projection for a 2D histogram
+  switch (histType)
+    {
+      case 2:
+        strncpy(outFileName,filename,224);
+        snprintf(suffix,32,"hist%i_proj.spe",histNum);
+        strncat(outFileName,suffix,32);
+        if((out=fopen(outFileName,"w"))==NULL)
+          {
+            printf("\nOutput file %s is not accessible.\n",outFileName);
+            exit(-1);
+          }
+        printf("Saving projection data to file: %s\n",outFileName);
+        
+        //write .spe header
+        buffSize = 24;
+        arraySize = S4K;
+        fwrite(&buffSize,sizeof(int32_t),1,out);
+        fwrite(&spLabel,sizeof(spLabel),1,out);
+        fwrite(&arraySize,sizeof(int32_t),1,out);
+        fwrite(&junk,sizeof(int32_t),1,out);
+        fwrite(&junk,sizeof(int32_t),1,out);
+        fwrite(&junk,sizeof(int32_t),1,out);
+        fwrite(&buffSize,sizeof(int32_t),1,out);
+
+        int byteSize = arraySize*=4;
+        fwrite(&byteSize,sizeof(int32_t),1,out);
+        for(i=0;i<S4K;i++){
+          val = 0.;
+          for(j=0;j<S4K;j++)
+            val += (float)hist2[j][i];
+          //printf("projection index %i: %f\n",i,val);
           fwrite(&val,sizeof(float),1,out);
         }
         fwrite(&byteSize,sizeof(int32_t),1,out);
@@ -64,7 +116,7 @@ int main(int argc, char *argv[])
 {
 
   FILE *inp;
-  char str[4096];
+  char str[S4K];
   char histName[256], outFileName[224];
 
   if(argc!=2)
@@ -82,15 +134,18 @@ int main(int argc, char *argv[])
     }
 
   char *tok;
-  char histType = 0; //0=no hist, 1=TH1F
+  char histType = 0; //0=no hist, 1=TH1F,TH1D,TH1I
   int histNum=0;
-  int ind;
+  int ind, indx, indy;
   float val;
+  int xsize=0;
+  int ysize=0;
   strncpy(histName,"",256);
   memset(hist,0,sizeof(hist));
+  memset(hist2,0,sizeof(hist2));
 
   //setup output filename
-  strncpy(str,argv[1],4096);
+  strncpy(str,argv[1],S4K);
   tok = strtok(str,".");
   strncpy(outFileName,tok,224);
 
@@ -111,8 +166,26 @@ int main(int argc, char *argv[])
             if(strncmp(tok,histName,256)==0){
                switch (histType)
                 {
+                  case 2:
+                    //parse TH2
+                    tok = strtok (NULL," *->(),");
+                    if(strncmp(tok,"SetBinContent",256)==0){
+                      tok = strtok (NULL," *->(),");
+                      ind=atoi(tok);
+                      tok = strtok (NULL," *->(),");
+                      val=atof(tok);
+                      indx = ind % S4K;
+                      indy = (int)floor(ind/(1.*S4K));
+                      if((indx>=0)&&(indx<S4K)){
+                        if((indy>=0)&&(indy<S4K)){
+                          //printf("Read bin %i %i with value %f\n",indx,indy,val);
+                          hist2[indx][indy]=val;
+                        }
+                      }
+                    }
+                    break;
                   case 1:
-                    //parse TH1F
+                    //parse TH1
                     tok = strtok (NULL," *->(),");
                     if(strncmp(tok,"SetBinContent",256)==0){
                       tok = strtok (NULL," *->(),");
@@ -120,7 +193,7 @@ int main(int argc, char *argv[])
                       tok = strtok (NULL," *->(),");
                       val=atof(tok);
                       //printf("Read bin %i with value %f\n",ind,val);
-                      if((ind>=0)&&(ind<S32K)){
+                      if((ind>=0)&&(ind<S4K)){
                         hist[ind]=val;
                       }
                     }
@@ -135,11 +208,30 @@ int main(int argc, char *argv[])
             if(histType!=0){
               writeOutputFile(histType,histNum,histName,outFileName);
             }
-            printf("1-D histogram (floating point) found.\n");
+            printf("1-D histogram found.\n");
             histType = 1;
             tok = strtok (NULL," *");
             printf("Histogram name: %s\n",tok);
             strncpy(histName,tok,256);
+            histNum++;
+          }else if((strncmp(tok,"TH2F",256)==0)||(strncmp(tok,"TH2D",256)==0)||(strncmp(tok,"TH2I",256)==0)){
+            if(histType!=0){
+              writeOutputFile(histType,histNum,histName,outFileName);
+            }
+            printf("2-D histogram found.\n");
+            histType = 2;
+            tok = strtok (NULL," *");
+            printf("Histogram name: %s\n",tok);
+            strncpy(histName,tok,256);
+            tok = strtok (NULL,",");
+            tok = strtok (NULL,",");
+            tok = strtok (NULL,",");
+            xsize = atoi(tok);
+            tok = strtok (NULL,",");
+            tok = strtok (NULL,",");
+            tok = strtok (NULL,",");
+            ysize = atoi(tok);
+            printf("x size: %i, y size: %i\n",xsize,ysize);
             histNum++;
           }
         }
@@ -150,6 +242,8 @@ int main(int argc, char *argv[])
       printf("Aborting...\n");
       exit(1);
     }
+
+  fclose(inp);
 
   if(histType > 0)
     writeOutputFile(histType,histNum,histName,outFileName);

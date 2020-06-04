@@ -1,6 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#define S32K   32768
+#include <math.h>
 
-double hist[S32K]; //internal histogram
+#define S4K   4096
+
+//internal histograms
+double hist[S4K];
+double hist2[S4K][S4K];

@@ -12,4 +12,4 @@ The code works by directly parsing the macro file - it does not rely on ROOT in 
 
 ## Instructions
 
-Use 'make' to compile.  The code is run from the command line, run it without any parameters to see what is needed.
+Use `make` to compile.  The code is run from the command line, run it without any parameters to see what is needed.

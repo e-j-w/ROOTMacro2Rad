@@ -6,3 +6,7 @@ rootmacro2rad
 *.spx
 *.mca
 *.fmca
+*.esc
+*log
+*.m4b
+*.e4k
