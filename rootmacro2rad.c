@@ -1,10 +1,12 @@
 #include "rootmacro2rad.h"
 
-void writeOutputFile(char histType, const char* histName, char *filename){
+void writeOutputFile(char histType, int histNum, const char* histName, char *filename){
   
   FILE *out;
-  char outFileName[256];
-  strncpy(outFileName,filename,240);
+  int i;
+  float val;
+  char outFileName[256], suffix[32];
+  strncpy(outFileName,filename,224);
 
   //radware file header info
   int32_t buffSize;
@@ -16,7 +18,8 @@ void writeOutputFile(char histType, const char* histName, char *filename){
   switch (histType)
     {
       case 1:
-        strncat(outFileName,".spe",16);
+        snprintf(suffix,32,"hist%i.spe",histNum);
+        strncat(outFileName,suffix,32);
         break;
       default:
         break;
@@ -45,7 +48,10 @@ void writeOutputFile(char histType, const char* histName, char *filename){
 
         int byteSize = arraySize*=4;
         fwrite(&byteSize,sizeof(int32_t),1,out);
-        fwrite(&hist,byteSize,1,out);
+        for(i=0;i<arraySize;i++){
+          val = (float)hist[i];
+          fwrite(&val,sizeof(float),1,out);
+        }
         fwrite(&byteSize,sizeof(int32_t),1,out);
         break;
       default:
@@ -59,7 +65,7 @@ int main(int argc, char *argv[])
 
   FILE *inp;
   char str[4096];
-  char histName[256], outFileName[240];
+  char histName[256], outFileName[224];
 
   if(argc!=2)
     {
@@ -77,6 +83,7 @@ int main(int argc, char *argv[])
 
   char *tok;
   char histType = 0; //0=no hist, 1=TH1F
+  int histNum=0;
   int ind;
   float val;
   strncpy(histName,"",256);
@@ -85,7 +92,7 @@ int main(int argc, char *argv[])
   //setup output filename
   strncpy(str,argv[1],4096);
   tok = strtok(str,".");
-  strncpy(outFileName,tok,240);
+  strncpy(outFileName,tok,224);
 
   //read the input file
   if(fgets(str,1024,inp)!=NULL)
@@ -112,7 +119,7 @@ int main(int argc, char *argv[])
                       ind=atoi(tok);
                       tok = strtok (NULL," *->(),");
                       val=atof(tok);
-                      printf("Read bin %i with value %f\n",ind,val);
+                      //printf("Read bin %i with value %f\n",ind,val);
                       if((ind>=0)&&(ind<S32K)){
                         hist[ind]=val;
                       }
@@ -124,15 +131,16 @@ int main(int argc, char *argv[])
             }
           }
           
-          if(strncmp(tok,"TH1F",256)==0){
+          if((strncmp(tok,"TH1F",256)==0)||(strncmp(tok,"TH1D",256)==0)||(strncmp(tok,"TH1I",256)==0)){
             if(histType!=0){
-              writeOutputFile(histType,histName,outFileName);
+              writeOutputFile(histType,histNum,histName,outFileName);
             }
             printf("1-D histogram (floating point) found.\n");
             histType = 1;
             tok = strtok (NULL," *");
             printf("Histogram name: %s\n",tok);
             strncpy(histName,tok,256);
+            histNum++;
           }
         }
     }
@@ -143,7 +151,11 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-  writeOutputFile(histType,histName,outFileName);
+  if(histType > 0)
+    writeOutputFile(histType,histNum,histName,outFileName);
+  else
+    printf("No compatible histogram types found, no data was saved.\n");
+  printf("%i histogram(s) written.\n",histNum);
 
   return(1); //great success
 }
