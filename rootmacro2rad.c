@@ -119,6 +119,18 @@ int getRebinnedCh(int origCh, int rbf){
   return (int)floor(origCh/(1.*rebinFactor));
 }
 
+void printValidOptions(){
+  printf("     -offset NUMBER  : offset the starting channel by the specified\n");
+  printf("                       number of channels, useful for studying\n");
+  printf("                       data beyond the 4096 channel limit allowed\n");
+  printf("                       by RadWare\n");
+  printf("     -yoffset NUMBER : same as -offset, except on the y-axis, for 2D\n");
+  printf("                       histograms\n");
+  printf("     -rebin NUMBER   : rebin/contract the output spectra by the\n");
+  printf("                       specified integer factor (applied after -offset\n");
+  printf("                       and -yoffset)\n");
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -132,15 +144,7 @@ int main(int argc, char *argv[])
       printf("\nrootmacro2rad macro_file OPTIONS\n");
       printf("\nConvert the specified ROOT macro (.C) file into files(s) readable by RadWare.\nROOT macros can be generated using the 'File/Save' option in a ROOT TBrowser (select the .C file option).\n");
       printf("\nExtra options:\n");
-      printf("     -offset NUMBER  : offset the starting channel by the specified\n");
-      printf("                       number of channels, useful for studying\n");
-      printf("                       data beyond the 4096 channel limit allowed\n");
-      printf("                       by RadWare\n");
-      printf("     -yoffset NUMBER : same as -offset, except on the y-axis, for 2D\n");
-      printf("                       histograms\n");
-      printf("     -rebin NUMBER   : rebin/contract the output spectra by the\n");
-      printf("                       specified integer factor (applied after -offset\n");
-      printf("                       and -yoffset)\n");
+      printValidOptions();
       exit(-1);
     }
 
@@ -166,28 +170,37 @@ int main(int argc, char *argv[])
         exit(-1);
     }
   for(i=2;i<(argc-1);i++){
-    if((strcmp(argv[i],"-rebin")==0)||(strcmp(argv[i],"-e")==0)){
+    if(strcmp(argv[i],"-rebin")==0){
       rebinFactor=atoi(argv[i+1]);
       if(rebinFactor <= 0.){
         printf("ERROR: Invalid rebin factor (%i).  Value must be a positive integer.\n",rebinFactor);
         exit(-1);
+      }else{
+        printf("Result will be rebinned by a factor of %i.\n",rebinFactor);
       }
     }else if(strcmp(argv[i],"-offset")==0){
       startBinOffset=atoi(argv[i+1]);
       if(startBinOffset <= 0.){
-        printf("ERROR: Invalid offset (%i).  Value must be a positive integer.\n",rebinFactor);
+        printf("ERROR: Invalid offset (%i).  Value must be a positive integer.\n",startBinOffset);
         exit(-1);
+      }else{
+        printf("Start bin will be offset by %i.\n",startBinOffset);
       }
     }else if(strcmp(argv[i],"-yoffset")==0){
       startBinOffsetY=atoi(argv[i+1]);
       if(startBinOffsetY <= 0.){
-        printf("ERROR: Invalid y-offset (%i).  Value must be a positive integer.\n",rebinFactor);
+        printf("ERROR: Invalid y-offset (%i).  Value must be a positive integer.\n",startBinOffsetY);
         exit(-1);
+      }else{
+        printf("Start y bin will be offset by %i.\n",startBinOffsetY);
       }
+    }else{
+      printf("ERROR: unknown option '%s'\nValid options are:\n",argv[i]);
+      printValidOptions();
+      exit(-1);
     }
+    i++;
   }
-
-  
 
   //setup output filename
   strncpy(str,argv[1],S4K);
