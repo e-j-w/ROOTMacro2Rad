@@ -8,3 +8,7 @@
 //internal histograms
 double hist[S4K];
 double hist2[S4K][S4K];
+
+//other globals
+int rebinFactor;
+int startBinOffset, startBinOffsetY;

@@ -112,29 +112,44 @@ void writeOutputFile(char histType, int histNum, const char* histName, char *fil
 
 }
 
+int getRebinnedCh(int origCh, int rbf){
+  if(rbf==1)
+    return origCh;
+
+  return (int)floor(origCh/(1.*rebinFactor));
+}
+
 int main(int argc, char *argv[])
 {
 
   FILE *inp;
   char str[S4K];
   char histName[256], outFileName[224];
+  int i;
 
-  if(argc!=2)
+  if(argc<2)
     {
-      printf("rootmacro2rad macro_file\n");
-      printf("\nConvert the specified ROOT macro (.C) file into something readable by RadWare.\nROOT macros can be generated using the 'File/Save' option in a ROOT TBrowser (select the .C file option).\n");
+      printf("\nrootmacro2rad macro_file OPTIONS\n");
+      printf("\nConvert the specified ROOT macro (.C) file into files(s) readable by RadWare.\nROOT macros can be generated using the 'File/Save' option in a ROOT TBrowser (select the .C file option).\n");
+      printf("\nExtra options:\n");
+      printf("     -offset NUMBER  : offset the starting channel by the specified\n");
+      printf("                       number of channels, useful for studying\n");
+      printf("                       data beyond the 4096 channel limit allowed\n");
+      printf("                       by RadWare\n");
+      printf("     -yoffset NUMBER : same as -offset, except on the y-axis, for 2D\n");
+      printf("                       histograms\n");
+      printf("     -rebin NUMBER   : rebin/contract the output spectra by the\n");
+      printf("                       specified integer factor (applied after -offset\n");
+      printf("                       and -yoffset)\n");
       exit(-1);
     }
 
-  //read in command line arguments
-  if((inp=fopen(argv[1],"r"))==NULL)
-    {
-        printf("\nSpecified file %s can not be opened\n",argv[1]);
-        exit(-1);
-    }
-
+  //set default values
+  rebinFactor = 1;
+  startBinOffset = 0;
+  startBinOffsetY = 0;
   char *tok;
-  char histType = 0; //0=no hist, 1=TH1F,TH1D,TH1I
+  char histType = 0; //0=no hist, 1=TH1, 2=TH2
   int histNum=0;
   int ind, indx, indy;
   float val;
@@ -143,6 +158,36 @@ int main(int argc, char *argv[])
   strncpy(histName,"",256);
   memset(hist,0,sizeof(hist));
   memset(hist2,0,sizeof(hist2));
+
+  //read in command line arguments
+  if((inp=fopen(argv[1],"r"))==NULL)
+    {
+        printf("\nSpecified file %s can not be opened\n",argv[1]);
+        exit(-1);
+    }
+  for(i=2;i<(argc-1);i++){
+    if((strcmp(argv[i],"-rebin")==0)||(strcmp(argv[i],"-e")==0)){
+      rebinFactor=atoi(argv[i+1]);
+      if(rebinFactor <= 0.){
+        printf("ERROR: Invalid rebin factor (%i).  Value must be a positive integer.\n",rebinFactor);
+        exit(-1);
+      }
+    }else if(strcmp(argv[i],"-offset")==0){
+      startBinOffset=atoi(argv[i+1]);
+      if(startBinOffset <= 0.){
+        printf("ERROR: Invalid offset (%i).  Value must be a positive integer.\n",rebinFactor);
+        exit(-1);
+      }
+    }else if(strcmp(argv[i],"-yoffset")==0){
+      startBinOffsetY=atoi(argv[i+1]);
+      if(startBinOffsetY <= 0.){
+        printf("ERROR: Invalid y-offset (%i).  Value must be a positive integer.\n",rebinFactor);
+        exit(-1);
+      }
+    }
+  }
+
+  
 
   //setup output filename
   strncpy(str,argv[1],S4K);
@@ -171,10 +216,12 @@ int main(int argc, char *argv[])
                       val=atof(tok);
                       indx = ind % S4K;
                       indy = (int)floor(ind/(1.*S4K));
+                      indx = getRebinnedCh(indx-startBinOffset,rebinFactor);
+                      indy = getRebinnedCh(indy-startBinOffsetY,rebinFactor);
                       if((indx>=0)&&(indx<S4K)){
                         if((indy>=0)&&(indy<S4K)){
                           //printf("Read bin %i %i with value %f\n",indx,indy,val);
-                          hist2[indx][indy]=val;
+                          hist2[indx][indy]+=val;
                         }
                       }
                     }
@@ -187,9 +234,10 @@ int main(int argc, char *argv[])
                       ind=atoi(tok);
                       tok = strtok (NULL," *->(),");
                       val=atof(tok);
+                      ind = getRebinnedCh(ind-startBinOffset,rebinFactor);
                       //printf("Read bin %i with value %f\n",ind,val);
                       if((ind>=0)&&(ind<S4K)){
-                        hist[ind]=val;
+                        hist[ind]+=val;
                       }
                     }
                     break;
